@@ -17,9 +17,4 @@ Future versions will add the following functionality:
 The subdirectory senpy is the python package. Download and add this directory to your current working directory, python site packages, or the python path. Then the package can be imported using `import senpy`. Right now all user methods are contained in the Neyer object. So, it is suggested that you use `import senpy.neyer as neyer` and then the Neyer object can be instantiated using `estimator = neyer.Neyer()`.
 
 For example:
-<object data="./examples/composite.pdf" type="application/pdf" width="615px" height="1107px">
-    <embed src="./examples/composite.pdf">
-        <p>Unable to load the pdf image. Can be found at ./examples/composite.pdf</p>
-    </embed>
-</object>
-
+![Example code usage and output. Can be found at ./examples/composite.pdf](./examples/composite.pdf)
