@@ -2,7 +2,7 @@
 A python package of algorithms for sensitivity testing.
 
 Currently implements the Neyer method which consists of:
-  - Using maximum likelihood estimators (MLEs) to estimate the parameters of an assume latent distribution.
+  - Maximum likelihood estimators (MLEs) to estimate the parameters of an assume latent distribution.
   - Provides a sequential design routine to suggest to the user new stimulus levels for efficent testing.
   
 Future versions will add the following functionality: 
