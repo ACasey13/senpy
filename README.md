@@ -1,6 +1,6 @@
 # SenPy
-A python package of algorithms for sensitivity testing.
-  **Authors:** Alex Casey, David Arthur
+A python package of algorithms for sensitivity testing.  
+**Authors:** Alex Casey, David Arthur
 
 Currently implements the Neyer method which consists of:
   - Maximum likelihood estimators (MLEs) to estimate the parameters of an assume latent distribution.
