@@ -1,0 +1,22 @@
+senpy package
+=============
+
+Submodules
+----------
+
+senpy.neyer module
+------------------
+
+.. automodule:: senpy.neyer
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
+Module contents
+---------------
+
+.. automodule:: senpy
+   :members:
+   :undoc-members:
+   :show-inheritance:

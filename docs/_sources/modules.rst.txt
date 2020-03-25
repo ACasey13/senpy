@@ -1,0 +1,7 @@
+senpy
+=====
+
+.. toctree::
+   :maxdepth: 4
+
+   senpy

@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Fri Feb 28 15:32:38 2020
-
-@author: alexc
-"""
 
 import numpy as np
 from scipy.optimize import minimize, brute, fmin
@@ -15,10 +10,70 @@ import copy
 from .utils import (custom_log, _round, check_bounds, check_diff, 
                    check_success, check_fail)
 
+
 class Neyer():
     """
-    Implements the maximum likelihood estimates of parameters theta given a set of data.
-    Optimization algorithms used are L-BFGS-G (default), TNC, and SLSQP.
+    The Neyer model. Given an assumed form for the latent distribution,
+    either 'normal', 'logistic', or 'log-logistic', the maximum likelihood 
+    estimates of the distribution parameters are computed. Neyer also provides
+    a sequential design algorithm.
+
+    Parameters
+    ----------
+    latent : string, optional
+        DESCRIPTION. The form of the latent distribution. Either 'normal', 
+        'logistic', or 'log-logistic'. The default is 'normal'.
+    inverted : boolean, optional
+        DESCRIPTION. If the probability of a 'go' increases as the stimulus 
+        level decreases, then the data is 'inverted'. The default is False.
+    method : string, optional
+        DESCRIPTION. Name of the optimization routine called when computing 
+        the maximum likelihood estimates. The default is 'L-BFGS-B'.
+    num_restarts : int, optional
+        DESCRIPTION. The number of random initializations to use when 
+        maximizing the likelihood function. Note, the available latent 
+        distributions only use two parameters. Consequently, the resulting 
+        likelihood function is typically convex. The default is 3.
+    t1_min : flaot, optional
+        DESCRIPTION. When using the sequential design algorithm and starting 
+        with no (or minimal) data, an intial guess on the lower bound of 
+        the first parameter, theta_1, is required. For the normal and 
+        logistic distributions theta_1 is mu. For the log-logistic distribution 
+        theta_1 is alpoha. If None is provided and the sequential algorithm 
+        is called, the program will prompt the user for the value. 
+        The default is None.
+    t1_max : float, optional
+        DESCRIPTION. The initial guess for the upper bound of theta_1. 
+        See t1_min for more details. The default is None.
+    t2_guess : float, optional
+        DESCRIPTION. The initial guess for theta_2. Required when using the 
+        sequential design algorithm. See t1_min for more details. For the 
+        normal and logisit distributions, theta_2 is sigma. For the log-logistic 
+        distribution, theta_2 is beta. The default is None.
+    precision : int, optional
+        DESCRIPTION. Number of decimal points to incude in the final 
+        output. The default is 8.
+    resolution : float, optional
+        DESCRIPTION. The smallest change in stimulus level available. For 
+        example, a drop-weight apparatus may only have adjustments at 
+        quarter inch intervals. Thus, the algorithm should not suggest testing 
+        at 12.105 inches, etc. The default is None.
+    lower_bound : float, optional
+        DESCRIPTION. The lowest stimulus level a user can phsically test. 
+        The default is None.
+    upper_bound : float, optional
+        DESCRIPTION. The highest stimulus level a user can phsically test. 
+        The default is None.
+    hist : boolean, optional
+        DESCRIPTION. If True the determinant of the information matrix is 
+        computed over a range of stimulus levels at each stage of the 
+        sequential design. Typically used for debugging only! 
+        The default is False.
+    log_file : str, optional
+        DESCRIPTION. File path for a log file. The log consists of the 
+        steps taken during the sequential design algorithm. 
+        The default is None.
+
     """
     
     available_opt_methods = ('L-BFGS-B', 'SLSQP', 'TNC')
@@ -51,9 +106,9 @@ class Neyer():
         if latent == 'normal':
             from .norm_funcs import function_dictionary
         elif latent == 'logistic':
-            from .logit_funcs import function_dictionary
+            from .logistic_funcs import function_dictionary
         elif latent == 'log-logistic':
-            from .log_logit_funcs import function_dictionary
+            from .log_logistic_funcs import function_dictionary
         else: 
             raise ValueError("""Value for "latent" not understood.
             Must be "normal", "logistic", or "log-logistic".""")
@@ -101,6 +156,22 @@ class Neyer():
         self.updated = -1
             
     def fit(self, X, Y):
+        """
+        Compute the maximum likelihood estimates of the distribution parameters.
+
+        Parameters
+        ----------
+        X : 2D array
+            The tested stimulus levels. Must be of shape (n_pts, 1)
+        Y : array
+            The observed response at each stimulus level. 1 for 'go' and 0 
+            for 'no-go'.
+
+        Returns
+        -------
+        self
+
+        """
         if X.ndim != 2:
             raise ValueError("X must be of shape [n_examples, 1]")
         if X.shape[0] != Y.shape[0]:
@@ -145,6 +216,16 @@ class Neyer():
         return self
     
     def get_estimators(self):
+        """
+        Provides access to the stored estimate of theta. For example, 
+        [mu, sigma] or [alpha, beta].
+
+        Returns
+        -------
+        array
+            Current parameter estimates. Shape is (2,)
+
+        """
         if self.theta is not None:
             if check_diff(self.X, self.Y, self.inverted) > 0:
                 raise Exception('Not enough data to estimate theta.')
@@ -153,6 +234,21 @@ class Neyer():
             raise Exception('Model not yet trained!')
 
     def print_estimators(self, cost=False):
+        """
+        Prints the current parameter estimates to the console.
+
+        Parameters
+        ----------
+        cost : boolean, optional
+            If true, the value of the negative log-likelihood, or cost, at the 
+            current parameter estimates is also printed to the console. 
+            The default is False.
+
+        Returns
+        -------
+        None.
+
+        """
         if self.theta is not None:
             if check_diff(self.X, self.Y, self.inverted) > 0:
                 raise Exception('Not enough data to estimate theta.')
@@ -167,6 +263,42 @@ class Neyer():
     def predict_probability(self, pts=None, confidence=None, 
                             CI_level = [.5, .8, .9, .95], 
                             num_samples=1000, max_iter=5):
+        """
+        Returns the probability of a 'go' at pts. p(y=0|pt)
+
+        Parameters
+        ----------
+        pts : array, optional
+            The stimulus levels at which to compute probability predictions. 
+            The default is None. If None, range = max(X) - min(X) and 
+            pts = np.linspace(min(X)-0.5*range, max(X)+0.5*range, 100)
+        confidence : str, optional
+            The name of the method used to supply confidence intervals. 
+            Options are 'delta', 'perturbation' (same as delta), 'likelihood-ratio', 
+            'parametric-bootstrap', and 'nonparametric-bootstrap'. 
+            The default is None.
+        CI_level : list, optional
+            The confidence levels. Ignored if confidence is None. 
+            The default is [.5, .8, .9, .95].
+        num_samples : int, optional
+            The number of bootstrapped samples generated. Only used if 
+            confidence = 'parametric-bootstrap' or 'nonparametric=bootstrap'. 
+            The default is 1000.
+        max_iter : int, optional
+            The maximum number of attempts to map the likelihood ratio. 
+            Only used if confidence = 'likelihood-ratio'. The default is 5.
+
+        Returns
+        -------
+        tuple
+            Consists of the stimulus points, the predicted probability, and 
+            arrays of the lower bounds and upper bounds of the confidence levels 
+            if confidence was requested.
+            (pts (n_pts, 1), predicted probability (n_pts, 1)) or 
+            (pts (n_pts, 1), predicted probability (n_pts, 1), lower CI bounds, upper CI bounds) 
+            where the shape of lower and upper CI bounds is (n_pts, n_levels)
+
+        """
         if self.theta is None:
             raise Exception('Model not yet trained!')
         if check_diff(self.X, self.Y, self.inverted) > 0:
@@ -219,12 +351,68 @@ class Neyer():
             raise ValueError("confidence '{}' not understood.\nPlease choose from {}".format(confidence, ci_methods))
             
     def plot_probability(self, include_data=True, xlabel=None, ylabel=None,
-                         alpha=1.0, save_dst=None, show=False, **kwargs):
+                         alpha=1.0, save_dst=None, show=True, **kwargs):
+        """
+        A high-level method to call self.predict_probability and plot the result.
+
+        Parameters
+        ----------
+        include_data : boolean, optional
+            Whether or not to plot the data (stimuli and responses). 
+            The default is True.
+        xlabel : str, optional
+            If provided, the text for the plot xlabel. The default is None.
+        ylabel : str, optional
+            If provided, the text for the plot ylabel. The default is None.
+        alpha : float, optional
+            opacity of the observed data points. Must be between 0 and 1. 
+            Only used if include_data is True. Useful to visualize many overlapping 
+            data points. The default is 1.0.
+        save_dst : str, optional
+            The file path (including file type) where the plot should be saved. 
+            The default is None.
+        show : boolean, optional
+            If True, simply calls matplotlib.plt.show(). May be required for 
+            some IDEs. The default is True.
+        **kwargs : 
+            All keyworkd arguments provided to predict_probability can also be 
+            provided here.
+
+        Returns
+        -------
+        None.
+
+        """
         pp(self, include_data, xlabel, ylabel,
            alpha, save_dst, show, **kwargs)
         
     def plot_confidence_region(self, limits, n, CI_levels=10, 
-                               save_dst=None, show=False):
+                               save_dst=None, show=True):
+        """
+        A high-level function to plot the confidence region of the parameters.
+
+        Parameters
+        ----------
+        limits : list
+            The plot limits provided as [lower xlim, upper xlim, lower ylim, upper ylim].
+        n : int or list of length 2
+            The number locations to sample in the x (theta_1) and y (theta_2) directions.
+        CI_levels : int or list, optional
+            If an integer, a filled contour plot will be produced with that 
+            many levels. If it is a list, the list values specify the confidence 
+            levels at which to draw contour lines. The default is 10.
+        save_dst : str, optional
+            The file path (including file type) where the plot should be saved. 
+            The default is None
+        show : boolean, optional
+            If True, simply calls matplotlib.plt.show(). May be required for 
+            some IDEs. The default is True.
+
+        Returns
+        -------
+        None.
+
+        """
         if self.theta is None:
             raise Exception('Model not yet trained!')
         if check_diff(self.X, self.Y, self.inverted) > 0:
@@ -232,6 +420,16 @@ class Neyer():
         pcr(self, limits, n, CI_levels, save_dst, show)
         
     def __prompt_input(self):
+        """
+        If the sequential design algorithm is used and if there is 1) insufficent 
+        data or 2) t1_min, t1_max, and t2_guess were not specifed, then prompt 
+        the user for those values. Used internally. Should not be called.
+
+        Returns
+        -------
+        None.
+
+        """
         t1n, t2n = self.est_names()
         self.t1_min = float(input('Lower bound guess for {}: '.format(t1n)))
         self.t1_max = float(input('Upper bound guess for {}: '.format(t1n)))
@@ -284,6 +482,15 @@ class Neyer():
             raise ValueError('t2_guess must be positive!')
     
     def next_pt(self):
+        """
+        The sequential design algorithm. When this method is called, the next 
+        suggested stimulus level for testing is printed to the console.
+
+        Returns
+        -------
+        self
+
+        """
         Y = self.Y.copy().astype(bool)
         if self.inverted:
             Y = np.logical_not(Y)
@@ -424,6 +631,22 @@ class Neyer():
             return self.nx
         
     def post_test_outcome(self, res, pt):
+        """
+        Append a stimulus level and result to the existing data.
+
+        Parameters
+        ----------
+        res : int or boolean
+            The observed result at the tested stimulus level. Either 0, 1 or 
+            False, True.
+        pt : float
+            The stimulus level at which the test was performed.
+
+        Returns
+        -------
+        None.
+
+        """
         if isinstance(res, bool) or (res == 0) or (res == 1):
             self.X = np.vstack((self.X, pt))
             custom_log(self, 'Tested Points: \n {}'.format(self.X.flatten()))
@@ -434,7 +657,22 @@ class Neyer():
             
     def loop(self, iterations=1000000):
         """
-        This method suggests new test levels and accepts user input to calculate maximum likelihood estimates. That is, this method constitutes a loop. Loop will continue indefinitely until 'end' is received as user input during the either the test level or result input queries. Alternatively, if a set number of specimens is to be used then the number of loops can be specified with the 'iter' keyword argument.
+        This method suggests new test levels and accepts user input to calculate 
+        maximum likelihood estimates. That is, this method constitutes a loop. 
+        Loop will continue indefinitely until 'end' is received as user input 
+        during the either the test level or result input queries. Alternatively, 
+        if a set number of specimens is to be used then the number of loops can 
+        be specified with the 'iterations' keyword argument.
+
+        Parameters
+        ----------
+        iterations : int, optional
+            End the loop automatically after n iterations. The default is 1000000.
+
+        Returns
+        -------
+        None.
+
         """
 
         print('-'*50)

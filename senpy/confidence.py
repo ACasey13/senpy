@@ -9,7 +9,6 @@ import scipy.stats as st
 import numpy as np
 from scipy.stats import chi2
 from skimage import measure
-import matplotlib.pyplot as plt
 
 class HomogeneousResult(Exception):
     pass
@@ -158,6 +157,8 @@ def get_contours(vals, level, bounds, n):
 
 def map_likelihood_ratio(model, bounds, n, levels, max_iter, field=False,
                          counter=1):
+    if isinstance(n, int):
+        n = [n,]
     n = list(n)
     if len(n) == 1:
         n = n*2
