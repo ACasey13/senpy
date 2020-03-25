@@ -3,7 +3,7 @@ A python package of algorithms for sensitivity testing.
 **Authors:** Alex Casey, David Arthur
 
 Currently implements the Neyer method which consists of:
-  - Maximum likelihood estimators (MLEs) to estimate the parameters of an assume latent distribution.
+  - Maximum likelihood estimators (MLEs) to estimate the parameters of an assumed latent distribution.
   - Provides a sequential design routine to suggest to the user new stimulus levels for efficent testing.
   
 In addition to the functionality provided by the original Neyer software, this code can use an assumed log-logistic distribution and can use the perturbation (delta), parametric bootstrap, and non-parametric boostrap methods to estimate predictive condfidence intervals. 
